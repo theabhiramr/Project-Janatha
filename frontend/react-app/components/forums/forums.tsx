@@ -29,4 +29,9 @@ const Forums: React.FC = () => {
         const newPost: Post = {
             id: posts.length + 1,
             author,
-            content
+            content,
+            timestamp: new Date(),
+        };
+        setPosts([newPost, ...posts]);
+        setAuthor("");
+        setContent("");
