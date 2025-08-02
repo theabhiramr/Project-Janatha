@@ -24,8 +24,11 @@ const Forum: React.FC = () => {
     };
 
     return (
-        <div>
-            <h1>Forum</h1>
+        <ScrollView contentContainerStyle={styles.container}>
+            <Text style={styles.title}>Forum</Text>
+            <View style={}
+        </ScrollView>
+            /* <h1>Forum</h1>
             <div>
                 <textarea
                     value={newPostContent}
@@ -47,7 +50,7 @@ const Forum: React.FC = () => {
                 ))}
             </div>
         </div>
-    );
+    ); */}
 };
 
 export default Forum;
