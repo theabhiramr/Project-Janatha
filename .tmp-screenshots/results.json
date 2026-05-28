@@ -1,0 +1,37 @@
+[
+  [
+    "01-home",
+    "/",
+    "/"
+  ],
+  [
+    "02-explore",
+    "/explore",
+    "/explore"
+  ],
+  [
+    "03-feed",
+    "/feed",
+    "/feed"
+  ],
+  [
+    "04-chat",
+    "/chat",
+    "/landing"
+  ],
+  [
+    "05-profile",
+    "/profile",
+    "/landing"
+  ],
+  [
+    "06-auth",
+    "/auth",
+    "/auth"
+  ],
+  [
+    "07-events",
+    "/events",
+    "/landing"
+  ]
+]
