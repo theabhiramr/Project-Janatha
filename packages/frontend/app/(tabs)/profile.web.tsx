@@ -866,13 +866,25 @@ export default function Profile() {
   // WEB LAYOUT
   const { width: viewportWidth } = useWindowDimensions()
   const isNarrowWeb = viewportWidth < 768
+  // Wide desktop gets a two-column field grid; mobile web keeps the stacked
+  // single column. Native iOS uses the entirely separate layout above.
+  const isWideWeb = viewportWidth >= 1024
   const webPaddingH = isNarrowWeb ? 16 : viewportWidth < 1024 ? 32 : 60
+  const faintColor = isDark ? '#525252' : '#C4BEB4'
+
+  // Quiet placeholder for an empty read-only field — reads as "not set yet"
+  // rather than a bare em-dash. Hidden entirely when editing.
+  const EmptyValue = ({ label }: { label: string }) => (
+    <Text style={{ fontFamily: 'Inclusive Sans', fontSize: 15, color: faintColor, fontStyle: 'italic' }}>
+      {label}
+    </Text>
+  )
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: isDark ? '#171717' : '#FAFAF7' }}>
       <View
         style={{
-          maxWidth: 900,
+          maxWidth: isWideWeb ? 1080 : 900,
           width: '100%',
           alignSelf: 'center',
           padding: isNarrowWeb ? 20 : 40,
@@ -1047,8 +1059,10 @@ export default function Profile() {
           </View>
         </View>
 
-        {/* Birthday only */}
-        <View style={{ flexDirection: isNarrowWeb ? 'column' : 'row', gap: isNarrowWeb ? 20 : 28 }}>
+        {/* Birthday + Center — side by side on wide desktop, stacked otherwise.
+            Both are compact fields, so pairing them tightens the page and
+            uses the extra width instead of leaving a tall sparse column. */}
+        <View style={{ flexDirection: isWideWeb ? 'row' : 'column', gap: isWideWeb ? 28 : (isNarrowWeb ? 20 : 28), zIndex: 1 }}>
           <View style={{ flex: 1, gap: 8 }}>
             <Text style={labelStyle}>Birthday</Text>
             {isEditing ? (
@@ -1071,9 +1085,13 @@ export default function Profile() {
                   borderColor,
                 }}
               >
-                <Text style={{ fontFamily: 'Inclusive Sans', fontSize: 15, color: textColor }}>
-                  {formatBirthday(profileData.birthday) || '—'}
-                </Text>
+                {profileData.birthday ? (
+                  <Text style={{ fontFamily: 'Inclusive Sans', fontSize: 15, color: textColor }}>
+                    {formatBirthday(profileData.birthday)}
+                  </Text>
+                ) : (
+                  <EmptyValue label="Not added yet" />
+                )}
               </View>
             )}
             {errors.birthday && (
@@ -1089,59 +1107,11 @@ export default function Profile() {
               </Text>
             )}
           </View>
-        </View>
 
-        {/* Bio */}
-        <View style={{ gap: 8 }}>
-          <Text style={labelStyle}>Bio</Text>
-          <TextInput
-            ref={bioRef}
-            defaultValue={profileData.bio}
-            onChangeText={(v) => {
-              draftBio.current = v
-            }}
-            multiline
-            textAlignVertical="top"
-            placeholderTextColor="#9ca3af"
-            style={[multilineInputStyle, !isEditing && hiddenStyle]}
-          />
-          {!isEditing && (
-            <View
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                backgroundColor: cardBg,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor,
-                minHeight: 80,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: 'Inclusive Sans',
-                  fontSize: 15,
-                  color: mutedTextColor,
-                  lineHeight: 24,
-                }}
-              >
-                {profileData.bio || '—'}
-              </Text>
-            </View>
-          )}
-          {errors.bio && (
-            <Text
-              style={{ fontFamily: 'Inclusive Sans', fontSize: 13, color: '#DC2626', marginTop: 6 }}
-            >
-              {errors.bio}
-            </Text>
-          )}
-        </View>
-
-        {/* Center */}
-        <View style={{ gap: 8 }}>
-          <Text style={labelStyle}>Center</Text>
-          {isEditing ? (
+          {/* Center */}
+          <View style={{ flex: 1, gap: 8 }}>
+            <Text style={labelStyle}>Center</Text>
+            {isEditing ? (
             <View
               style={{
                 position: 'relative',
