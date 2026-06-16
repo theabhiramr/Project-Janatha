@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useCallback, useState, useEffect } from 'react'
 import { useRouter } from 'expo-router'
 import { useAnalytics } from '../utils/analytics'
 import PasswordStrength from '../components/auth/PasswordStrength'
 import { ImageCarousel } from '../components/auth/ImageCarousel'
 import { useAuthFlow } from '../components/auth/useAuthFlow'
+import { InviteCodeInput } from '../components/invite/InviteCodeField'
+import { extractInviteCode } from '../utils/validation'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const swamiChinmayanandaJpg = require('../assets/images/landing/Swami Chinmayananda.jpg')
 const swamiChinmayanandaAlt = require('../assets/images/landing/Swami Chinmayananda (1).jpg')
@@ -74,6 +76,9 @@ export default function AuthScreen() {
   const [emailFocused, setEmailFocused] = useState(false)
   const [passwordFocused, setPasswordFocused] = useState(false)
   const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false)
+  const [showInviteField, setShowInviteField] = useState(false)
+  const [inviteValue, setInviteValue] = useState('')
+  const [inviteError, setInviteError] = useState('')
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1280,
   )
@@ -125,6 +130,40 @@ export default function AuthScreen() {
         : 'Continue'
   const isNarrowWeb = viewportWidth < 1024
   const isMobile = viewportWidth < 640
+  const revealInviteField = useCallback(() => {
+    track('auth_have_invite_pressed', { source: 'auth' })
+    setShowInviteField(true)
+  }, [track])
+  const hideInviteField = useCallback(() => {
+    track('auth_invite_entry_cancelled', { source: 'auth' })
+    setShowInviteField(false)
+    setInviteValue('')
+    setInviteError('')
+  }, [track])
+  const openInvite = useCallback((code: string) => {
+    track('auth_invite_code_submitted', { source: 'auth' })
+    router.push(`/i/${encodeURIComponent(code)}` as never)
+  }, [router, track])
+  const submitInvite = useCallback(() => {
+    const code = extractInviteCode(inviteValue)
+    if (!code) {
+      setInviteError('Paste a valid invite link or code.')
+      return
+    }
+    setInviteError('')
+    openInvite(code)
+  }, [inviteValue, openInvite])
+  const handlePrimarySubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
+    if (showInviteField && inviteValue.trim()) {
+      event.preventDefault()
+      event.stopPropagation()
+      submitInvite()
+      return
+    }
+    handleSubmit(event)
+  }, [handleSubmit, inviteValue, showInviteField, submitInvite])
+  const inviteHasText = showInviteField && inviteValue.trim().length > 0
+  const primaryDisabled = inviteHasText ? loading : isButtonDisabled
 
   return (
     <div
@@ -327,7 +366,10 @@ export default function AuthScreen() {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <form
+            onSubmit={handlePrimarySubmit}
+            style={{ display: 'flex', flexDirection: 'column', gap: showInviteField ? 8 : 16 }}
+          >
             {/* Email input */}
             <input
               className="auth-input"
@@ -387,11 +429,24 @@ export default function AuthScreen() {
               </>
             )}
 
+            {authStep === 'initial' && !hasInvite && showInviteField && (
+              <InviteCodeInput
+                compact
+                value={inviteValue}
+                onChangeText={(next) => {
+                  setInviteValue(next)
+                  if (inviteError) setInviteError('')
+                }}
+                error={inviteError}
+                onSubmitEditing={submitInvite}
+              />
+            )}
+
             {/* Submit button */}
             <button
               className="auth-submit"
               type="submit"
-              disabled={isButtonDisabled}
+              disabled={primaryDisabled}
               style={{
                 width: '100%',
                 height: 48,
@@ -403,9 +458,9 @@ export default function AuthScreen() {
                 fontSize: 16,
                 fontFamily: 'Inclusive Sans, sans-serif',
                 fontWeight: '500',
-                cursor: isButtonDisabled ? 'not-allowed' : 'pointer',
-                marginTop: 8,
-                opacity: isButtonDisabled ? 0.4 : 1,
+                cursor: primaryDisabled ? 'not-allowed' : 'pointer',
+                marginTop: showInviteField ? 0 : 8,
+                opacity: primaryDisabled ? 0.4 : 1,
                 WebkitTapHighlightColor: 'transparent',
                 touchAction: 'manipulation',
               }}
@@ -414,29 +469,53 @@ export default function AuthScreen() {
             </button>
           </form>
 
-          {/* Have an invite? — manual code entry now that the typed step is cut
-              (form-03). Routes to the neutral paste screen (new-25). */}
-          {authStep === 'initial' && !hasInvite && (
+          {authStep === 'initial' && !hasInvite && showInviteField && (
             <p
               style={{
                 fontSize: 14,
                 color: '#78716C',
                 textAlign: 'center',
-                marginTop: 4,
+                marginTop: 12,
                 fontFamily: 'Inclusive Sans, sans-serif',
               }}
             >
-              Have an invite?{' '}
+              No invite?{' '}
               <span
                 role="button"
                 tabIndex={0}
-                onClick={() => { track('auth_have_invite_pressed', { source: 'auth' }); router.push('/join') }}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); track('auth_have_invite_pressed', { source: 'auth' }); router.push('/join') } }}
+                onClick={hideInviteField}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hideInviteField() } }}
                 style={{ color: '#E8862A', cursor: 'pointer', fontWeight: 600, padding: '8px 4px', margin: '-8px -4px', display: 'inline-block' }}
               >
-                Paste it
+                Use email instead
               </span>
             </p>
+          )}
+
+          {/* Have an invite? — reveal the same paste field used by /join and the mobile modal. */}
+          {authStep === 'initial' && !hasInvite && (
+            !showInviteField && (
+              <p
+                style={{
+                  fontSize: 14,
+                  color: '#78716C',
+                  textAlign: 'center',
+                  marginTop: 16,
+                  fontFamily: 'Inclusive Sans, sans-serif',
+                }}
+              >
+                Have an invite?{' '}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={revealInviteField}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); revealInviteField() } }}
+                  style={{ color: '#E8862A', cursor: 'pointer', fontWeight: 600, padding: '8px 4px', margin: '-8px -4px', display: 'inline-block' }}
+                >
+                  Paste it
+                </span>
+              </p>
+            )
           )}
 
           {authStep === 'login' && (

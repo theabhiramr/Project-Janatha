@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Image, Pressable, Text, View } from 'react-native'
+import { Image, Pressable, Text, View, type ImageSourcePropType } from 'react-native'
 import { Check } from 'lucide-react-native'
 import type { AppColors } from '../../tokens'
 import { CenterSearch } from '../center/CenterSearch'
@@ -56,6 +56,9 @@ export function FeedSetupRail({
   onJoinCenter,
   onBrowseEvents,
   onPasteInvite,
+  artworkSource,
+  signedOutTitle = 'Log in to see your feed.',
+  signedOutSubtitle = 'Posts from your center and events will show up here.',
 }: {
   colors: AppColors
   isSignedIn: boolean
@@ -65,8 +68,12 @@ export function FeedSetupRail({
   onBrowseEvents: () => void
   /** Hard-gate path for the not-yet-invited: paste an invite link or code. */
   onPasteInvite?: () => void
+  artworkSource?: ImageSourcePropType
+  signedOutTitle?: string
+  signedOutSubtitle?: string
 }) {
   const [joiningId, setJoiningId] = useState<string | null>(null)
+  const setupArtwork = artworkSource ?? diyaImage
 
   const handleJoin = async (centerId: string) => {
     setJoiningId(centerId)
@@ -96,16 +103,16 @@ export function FeedSetupRail({
       >
         <View style={{ alignItems: 'center', gap: 12 }}>
           <Image
-            source={diyaImage}
+            source={setupArtwork}
             accessibilityIgnoresInvertColors
             style={{ width: 72, height: 72 }}
             resizeMode="contain"
           />
           <Text style={{ fontFamily: 'Inclusive Sans', fontSize: 22, lineHeight: 28, color: colors.text, textAlign: 'center' }}>
-            Log in to see your feed.
+            {signedOutTitle}
           </Text>
           <Text style={{ fontSize: 14, lineHeight: 20, color: colors.textMuted, textAlign: 'center' }}>
-            Posts from your center and events will show up here.
+            {signedOutSubtitle}
           </Text>
         </View>
 

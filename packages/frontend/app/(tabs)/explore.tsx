@@ -315,7 +315,7 @@ export default function DiscoverScreen() {
   // Four positions (as translateY values from the expanded state):
   //   expanded  = 0           → 100% sheet visible (full screen, header hidden)
   //   mid       = sheet * 0.2 → ~80% sheet visible (most content, map peeking)
-  //   collapsed = sheet * 0.6 → ~40% sheet visible (peek + a few rows)
+  //   collapsed = sheet * 2/3 → ~33% sheet visible (peek + a few rows)
   //   peek      = sheet - 100 → just handle + search bar visible (100px)
 
   const EXPANDED_TOP = 60 // px from top of container when fully expanded
@@ -325,7 +325,7 @@ export default function DiscoverScreen() {
 
   const SNAP_EXPANDED = 0
   const SNAP_MID = Math.max(0, sheetHeight * 0.2)        // ~80% sheet visible
-  const SNAP_COLLAPSED = Math.max(0, sheetHeight * 0.6)  // ~40% sheet visible
+  const SNAP_COLLAPSED = Math.max(0, sheetHeight * (2 / 3))  // ~33% sheet visible
   const SNAP_PEEK = Math.max(0, sheetHeight - 100)       // 100px sheet visible (handle + search)
 
   const snapsRef = useRef({ expanded: SNAP_EXPANDED, mid: SNAP_MID, collapsed: SNAP_COLLAPSED, peek: SNAP_PEEK })

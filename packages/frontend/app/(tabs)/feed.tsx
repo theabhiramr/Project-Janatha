@@ -416,10 +416,10 @@ export default function FeedScreen() {
   }, [router, track])
 
   // Hard-gate path (new-15): the not-yet-invited paste an invite link/code.
-  // /auth's invite step validates it; #403's Door 1 takes over post-#440.
+  // /join validates it; #403's Door 1 takes over post-#440.
   const handlePasteInvite = useCallback(() => {
     track('feed_paste_invite_pressed', { source: 'feed_setup' })
-    router.push('/auth' as never)
+    router.push('/join' as never)
   }, [router, track])
 
   // Inline "join your center" from the empty-state rail. A guest can't persist a

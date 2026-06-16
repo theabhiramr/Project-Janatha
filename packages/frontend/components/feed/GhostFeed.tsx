@@ -170,20 +170,24 @@ export function GhostFeed({
   variant,
   centerName,
   onCompose,
+  showWelcomeCard = true,
 }: {
   colors: AppColors
   variant: 'welcome' | 'firstPost'
   centerName?: string
   onCompose?: () => void
+  showWelcomeCard?: boolean
 }) {
-  const ghostOpacities = [0.5, 0.32, 0.18]
+  const ghostOpacities = showWelcomeCard ? [0.5, 0.32, 0.18] : [0.66, 0.46, 0.28, 0.16]
   return (
     <View style={{ gap: 14 }}>
-      {variant === 'welcome' ? (
-        <WelcomeCard colors={colors} />
-      ) : (
-        <FirstPostCard colors={colors} centerName={centerName} onCompose={onCompose} />
-      )}
+      {showWelcomeCard ? (
+        variant === 'welcome' ? (
+          <WelcomeCard colors={colors} />
+        ) : (
+          <FirstPostCard colors={colors} centerName={centerName} onCompose={onCompose} />
+        )
+      ) : null}
 
       <View style={{ position: 'relative', gap: 12 }} pointerEvents="none">
         {ghostOpacities.map((opacity, i) => (

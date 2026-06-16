@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useColors } from '../hooks/useColors'
 import { extractInviteCode } from '../utils/validation'
 import PasteInvite from '../components/invite/PasteInvite'
+import Logo from '../components/ui/Logo'
 
 /**
  * /join — neutral "Have an invite?" paste screen (new-25). The target of every
@@ -35,11 +36,14 @@ export default function JoinScreen() {
         paddingHorizontal: 24,
       }}
     >
-      <PasteInvite
-        title="Have an invite?"
-        subtitle="Paste your invite link or code."
-        showBrowse
-      />
+      <View style={{ width: '100%', maxWidth: 440, alignItems: 'center', gap: 34 }}>
+        <Logo size={32} />
+        <PasteInvite
+          title="Welcome"
+          subtitle="Paste your invite link or code to continue."
+          showBrowse
+        />
+      </View>
     </View>
   )
 }

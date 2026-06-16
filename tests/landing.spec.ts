@@ -9,38 +9,35 @@ test.describe('Landing Page', () => {
     await expect(page.getByText('Grow together')).toBeVisible()
   })
 
-  test('shows navigation bar with Get Started button', async ({ page }) => {
+  test('shows navigation bar with hero CTA', async ({ page }) => {
     await page.goto('/landing')
-    await page.waitForLoadState('networkidle')
 
     const brand = page.locator('text=Janata >> visible=true').first()
     await expect(brand).toBeVisible({ timeout: 10000 })
 
-    const getStartedBtn = page.getByText('Get Started', { exact: true }).first()
-    await expect(getStartedBtn).toBeVisible({ timeout: 10000 })
+    const startExploring = page.getByText(/Start Exploring/i).first()
+    await expect(startExploring).toBeVisible({ timeout: 10000 })
   })
 
-  test('Join the Community button navigates to auth', async ({ page }) => {
+  test('hero Start Exploring button navigates to Explore', async ({ page }) => {
     await page.goto('/landing')
-    await page.waitForLoadState('networkidle')
 
-    // "Join the Community →" is a Pressable (role=button)
-    const joinBtn = page.getByText(/join the community/i)
-    await expect(joinBtn).toBeVisible({ timeout: 10000 })
-    await joinBtn.click()
+    const startExploring = page.getByText(/Start Exploring/i).first()
+    await expect(startExploring).toBeVisible({ timeout: 10000 })
+    await startExploring.click()
 
-    await page.waitForURL(/\/auth/, { timeout: 10000 })
+    await page.waitForURL(/\/explore/, { timeout: 10000 })
   })
 
-  test('Get Started button navigates to auth', async ({ page }) => {
+  test('final browse button navigates to Explore', async ({ page }) => {
     await page.goto('/landing')
-    await page.waitForLoadState('networkidle')
 
-    const getStartedBtn = page.getByText('Get Started', { exact: true }).first()
-    await expect(getStartedBtn).toBeVisible({ timeout: 10000 })
-    await getStartedBtn.click()
+    const browse = page.getByText(/Browse events nearby/i).first()
+    await browse.scrollIntoViewIfNeeded()
+    await expect(browse).toBeVisible({ timeout: 10000 })
+    await browse.click()
 
-    await page.waitForURL(/\/auth/, { timeout: 10000 })
+    await page.waitForURL(/\/explore/, { timeout: 10000 })
   })
 
   test('page has no critical console errors (excluding WebGL)', async ({ page }) => {

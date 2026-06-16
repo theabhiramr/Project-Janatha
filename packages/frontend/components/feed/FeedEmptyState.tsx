@@ -56,6 +56,7 @@ export function FeedEmptyState({
       variant={state === 'firstPost' ? 'firstPost' : 'welcome'}
       centerName={centerName}
       onCompose={onCompose}
+      showWelcomeCard={!(isDesktop && state === 'guest')}
     />
   )
 

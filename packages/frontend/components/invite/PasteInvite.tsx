@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react'
-import { View, Text, TextInput, Pressable } from 'react-native'
+import { useCallback } from 'react'
+import { View, Text, Pressable } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useColors } from '../../hooks/useColors'
-import { extractInviteCode } from '../../utils/validation'
+import InviteCodeField from './InviteCodeField'
 
 type PasteInviteProps = {
   /** Headline — neutral ("Have an invite?") or error ("This invite isn't active"). */
@@ -23,13 +23,10 @@ type PasteInviteProps = {
 export default function PasteInvite({ title, subtitle, showBrowse }: PasteInviteProps) {
   const c = useColors()
   const router = useRouter()
-  const [pasted, setPasted] = useState('')
-  const canOpen = !!extractInviteCode(pasted)
 
-  const open = useCallback(() => {
-    const code = extractInviteCode(pasted)
-    if (code) router.replace(`/i/${encodeURIComponent(code)}`)
-  }, [pasted, router])
+  const open = useCallback((code: string) => {
+    router.replace(`/i/${encodeURIComponent(code)}` as never)
+  }, [router])
 
   return (
     <View style={{ width: '100%', maxWidth: 440, alignItems: 'center', gap: 16 }}>
@@ -44,39 +41,7 @@ export default function PasteInvite({ title, subtitle, showBrowse }: PasteInvite
         </Text>
       </View>
 
-      <View style={{ width: '100%', gap: 10 }}>
-        <TextInput
-          value={pasted}
-          onChangeText={setPasted}
-          placeholder="Paste an invite link or code"
-          placeholderTextColor={c.textFaint}
-          autoCapitalize="none"
-          autoCorrect={false}
-          onSubmitEditing={open}
-          style={{
-            backgroundColor: c.surface,
-            borderRadius: 8,
-            paddingVertical: 12,
-            paddingHorizontal: 14,
-            fontSize: 15,
-            color: c.text,
-          }}
-        />
-        <Pressable
-          onPress={open}
-          disabled={!canOpen}
-          style={{
-            backgroundColor: canOpen ? c.accent : c.surface,
-            borderRadius: 12,
-            paddingVertical: 15,
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{ color: canOpen ? c.textInverse : c.textFaint, fontSize: 16, fontWeight: '600' }}>
-            Open invite
-          </Text>
-        </Pressable>
-      </View>
+      <InviteCodeField onSubmit={open} />
 
       {showBrowse && (
         <Pressable onPress={() => router.replace('/(tabs)')} style={{ paddingVertical: 8 }}>

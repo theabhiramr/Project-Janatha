@@ -13,9 +13,12 @@ import { extractCityState } from '../../utils/addressParsing'
 import { FeaturedEventCard, type FeaturedSource } from '../../components/home/FeaturedEventCard'
 import { MiniEventRow, type WeekItem } from '../../components/home/MiniEventRow'
 import { BoardPostCard, SignInCallout, boardPostToMessage, type BoardMessage } from '../../components/boards'
+import { FeedSetupRail } from '../../components/feed'
 import { DesktopColumns, desktopScrollContent, useDesktopLayout } from '../../components/layout/DesktopColumns'
 import AuthPromptModal from '../../components/ui/AuthPromptModal'
 import type { AppColors } from '../../tokens'
+
+const compassImage = require('../../assets/images/onboarding/compass.png')
 
 function formatDatePill(dateStr: string): { month: string; day: string } {
   const parsed = new Date(`${dateStr}T00:00:00`)
@@ -160,8 +163,10 @@ export default function HomeScreen() {
   // A signed-in, verified member (vl >= 45). Guests and unverified users get the
   // stripped home: Explore + sign-in nudge, no personalized event/board lists.
   const isVerifiedMember = !!user && vl >= 45
+  const isLoggedOutWeb = Platform.OS === 'web' && !user
 
-  if (discoverLoading || (user ? myEventsLoading : false)) {
+  const shouldWaitForHomeData = user ? (discoverLoading || myEventsLoading) : (!isLoggedOutWeb && discoverLoading)
+  if (shouldWaitForHomeData) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg }}>
         <ActivityIndicator size="large" color={c.accent} />
@@ -195,6 +200,29 @@ export default function HomeScreen() {
         track('home_signin_pressed', { source: 'home_nudge' })
         setShowAuthPrompt(true)
       }}
+    />
+  ) : null
+
+  const guestSetupRail = !user ? (
+    <FeedSetupRail
+      colors={c}
+      isSignedIn={false}
+      onSignIn={() => {
+        track('home_signin_pressed', { source: 'home_desktop_rail' })
+        setShowAuthPrompt(true)
+      }}
+      onJoinCenter={() => undefined}
+      onBrowseEvents={() => {
+        track('home_guest_browse_events_pressed', { source: 'home_desktop_rail' })
+        router.push('/explore' as never)
+      }}
+      onPasteInvite={() => {
+        track('home_paste_invite_pressed', { source: 'home_desktop_rail' })
+        router.push('/join' as never)
+      }}
+      artworkSource={compassImage}
+      signedOutTitle="Log in to make Janata yours."
+      signedOutSubtitle="Your center, events, and community updates will show up here."
     />
   ) : null
 
@@ -390,9 +418,26 @@ export default function HomeScreen() {
   // stranding a narrow column in empty gray. Reuses the exact same section
   // blocks as mobile; only their arrangement differs.
   if (isWideDesktop) {
-    // Guests: live events in the main column, the compact log-in callout as
-    // the rail (new-30). Members keep first-run overview / boards there.
-    const rail = !user ? guestNudge : isNewUser ? firstRunOverview : (
+    if (isLoggedOutWeb) {
+      return (
+        <>
+          <ScrollView
+            style={{ flex: 1, backgroundColor: c.bg }}
+            contentContainerStyle={desktopScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <DesktopColumns
+              main={<HomeGhostPreview c={c} />}
+              rail={guestSetupRail}
+            />
+          </ScrollView>
+          {authPrompt}
+        </>
+      )
+    }
+
+    // Members keep first-run overview / boards in the rail.
+    const rail = isNewUser ? firstRunOverview : (
       <View style={{ gap: 22 }}>{boardsSection}</View>
     )
     return (
@@ -418,6 +463,27 @@ export default function HomeScreen() {
             }
             rail={rail}
           />
+        </ScrollView>
+        {authPrompt}
+      </>
+    )
+  }
+
+  if (isLoggedOutWeb) {
+    return (
+      <>
+        <ScrollView
+          style={{ flex: 1, backgroundColor: c.bg }}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 20,
+            paddingBottom: 40,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={{ width: '100%', maxWidth: 640, alignSelf: 'center' }}>
+            {guestSetupRail}
+          </View>
         </ScrollView>
         {authPrompt}
       </>
@@ -491,6 +557,113 @@ function WelcomeBanner({ c, onExplore, centerName }: { c: AppColors; onExplore: 
       >
         <Text style={{ fontFamily: 'Inclusive Sans', fontSize: 13.5, color: c.textInverse }}>Explore</Text>
       </Pressable>
+    </View>
+  )
+}
+
+function GhostBlock({
+  c,
+  width,
+  height,
+  opacity = 1,
+}: {
+  c: AppColors
+  width: number | string
+  height: number
+  opacity?: number
+}) {
+  return (
+    <View
+      style={{
+        width: width as any,
+        height,
+        opacity,
+        borderRadius: height / 2,
+        backgroundColor: c.panel,
+      }}
+    />
+  )
+}
+
+function HomeGhostPreview({ c }: { c: AppColors }) {
+  const rowOpacities = [0.58, 0.38, 0.22]
+  return (
+    <View style={{ gap: 14 }} pointerEvents="none">
+      <View
+        style={{
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: c.border,
+          backgroundColor: c.card,
+          overflow: 'hidden',
+          opacity: 0.72,
+        }}
+      >
+        <View style={{ height: 124, backgroundColor: c.panel }} />
+        <View style={{ padding: 16, gap: 12 }}>
+          <GhostBlock c={c} width={84} height={18} />
+          <View style={{ gap: 8 }}>
+            <GhostBlock c={c} width="70%" height={18} />
+            <GhostBlock c={c} width="46%" height={13} />
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row' }}>
+              {Array.from({ length: 4 }).map((_, index) => (
+                <View
+                  key={index}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    marginLeft: index === 0 ? 0 : -7,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: c.card,
+                    backgroundColor: c.panel,
+                  }}
+                />
+              ))}
+            </View>
+            <GhostBlock c={c} width={88} height={16} />
+          </View>
+        </View>
+      </View>
+
+      <View style={{ gap: 10 }}>
+        {rowOpacities.map((opacity, index) => (
+          <View
+            key={index}
+            style={{
+              opacity,
+              flexDirection: 'row',
+              gap: 12,
+              padding: 12,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: c.border,
+              backgroundColor: c.card,
+            }}
+          >
+            <View
+              style={{
+                width: 44,
+                height: 50,
+                borderRadius: 10,
+                backgroundColor: c.surface,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+              }}
+            >
+              <GhostBlock c={c} width={22} height={7} />
+              <GhostBlock c={c} width={18} height={14} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0, justifyContent: 'center', gap: 8 }}>
+              <GhostBlock c={c} width={index === 1 ? '58%' : '74%'} height={14} />
+              <GhostBlock c={c} width={index === 2 ? '42%' : '52%'} height={11} />
+            </View>
+          </View>
+        ))}
+      </View>
     </View>
   )
 }

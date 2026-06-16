@@ -32,7 +32,7 @@ test.describe('v2 guest', () => {
 
   test('guest Home shows the sign-in nudge', async ({ page }, testInfo) => {
     await gotoApp(page, '/')
-    await expect(vtext(page, /Make Janata yours|Sign in/i)).toBeVisible()
+    await expect(vtext(page, /Log in to make Janata yours|Make Janata yours/i)).toBeVisible()
     await shot(page, testInfo, 'home-guest')
   })
 
@@ -45,14 +45,14 @@ test.describe('v2 guest', () => {
 
   test('guest Feed shows the setup rail', async ({ page }, testInfo) => {
     await gotoApp(page, '/feed')
-    await expect(vtext(page, /Finish setting up your feed/i)).toBeVisible()
-    await expect(vtext(page, /Sign in/i)).toBeVisible()
+    await expect(vtext(page, /Log in to see your feed/i)).toBeVisible()
+    await expect(vtext(page, /Log in/i)).toBeVisible()
     await shot(page, testInfo, 'feed-setup-rail')
   })
 
-  test('guest Feed previews what the feed is (ghost card)', async ({ page }, testInfo) => {
+  test('guest Feed keeps the preview quiet', async ({ page }, testInfo) => {
     await gotoApp(page, '/feed')
-    await expect(vtext(page, /Your community feed/i)).toBeVisible()
+    await expect(page.getByText(/Your community feed/i)).toHaveCount(0)
     await shot(page, testInfo, 'feed-ghost-card')
   })
 

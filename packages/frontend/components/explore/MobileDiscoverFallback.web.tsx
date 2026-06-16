@@ -85,7 +85,7 @@ export function MobileDiscoverFallback() {
   )
 
   // Bottom sheet state
-  const [sheetSnap, setSheetSnap] = useState<SheetSnap>('mid')
+  const [sheetSnap, setSheetSnap] = useState<SheetSnap>('collapsed')
   const [sheetTranslateY, setSheetTranslateY] = useState<number | null>(null)
   const dragStartY = useRef(0)
   const dragStartTranslate = useRef(0)
@@ -94,14 +94,14 @@ export function MobileDiscoverFallback() {
   // Sheet snap positions matching iOS native (4 stops):
   //   expanded  = 0          -> 100% sheet visible (full)
   //   mid       = h * 0.2    -> 80% sheet visible
-  //   collapsed = h * 0.6    -> 40% sheet visible
+  //   collapsed = h * 2/3    -> 33% sheet visible
   //   peek      = h - 100    -> 100px sheet visible (handle + search)
   const getSnapPositions = useCallback(() => {
     const h = containerRef.current?.clientHeight || window.innerHeight
     return {
       expanded: 0,
       mid: h * 0.2,
-      collapsed: h * 0.6,
+      collapsed: h * (2 / 3),
       peek: Math.max(0, h - 100),
     }
   }, [])

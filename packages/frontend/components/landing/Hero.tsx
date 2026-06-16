@@ -674,7 +674,7 @@ export function Hero() {
           <Pressable
             onPress={() => {
               posthog?.capture('landing_cta_pressed', { variant: 'hero', label: 'start_exploring' })
-              router.push('/(tabs)')
+              router.push('/explore')
             }}
             className="bg-primary active:bg-primary-press rounded-full"
             style={{

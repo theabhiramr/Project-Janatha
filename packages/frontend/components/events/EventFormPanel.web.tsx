@@ -130,7 +130,7 @@ function NativeDateTimeInput({
   colors,
   isDark,
 }: {
-  type: 'date' | 'time'
+  type: 'date' | 'time' | 'datetime-local'
   value: string
   onChange: (v: string) => void
   min?: string
@@ -209,7 +209,7 @@ export default function EventFormPanel({ eventId, onClose, onSaved }: EventFormP
         const url = await uploadBoardImage(file)
         setImage(url)
       } catch {
-        setErrors((e) => ({ ...e, image: 'Upload failed — try again or paste a URL.' }))
+        setErrors((e) => ({ ...e, image: 'Upload failed. Please try again.' }))
       } finally {
         setUploadingImage(false)
       }
@@ -498,33 +498,24 @@ export default function EventFormPanel({ eventId, onClose, onSaved }: EventFormP
           />
         </View>
 
-        {/* Date & Time row */}
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <FieldLabel label="Date" colors={colors} required />
-            <NativeDateTimeInput
-              type="date"
-              value={date}
-              onChange={setDate}
-              min={today}
-              hasError={!!errors.date}
-              colors={colors}
-              isDark={isDark}
-            />
-            {errorText('date')}
-          </View>
-          <View style={{ flex: 1 }}>
-            <FieldLabel label="Time" colors={colors} />
-            <NativeDateTimeInput
-              type="time"
-              value={time}
-              onChange={setTime}
-              hasError={!!errors.time}
-              colors={colors}
-              isDark={isDark}
-            />
-            {errorText('time')}
-          </View>
+        {/* Date & time */}
+        <View>
+          <FieldLabel label="Date & time" colors={colors} required />
+          <NativeDateTimeInput
+            type="datetime-local"
+            value={date ? `${date}T${time || '12:00'}` : ''}
+            onChange={(value) => {
+              const [nextDate, nextTime = ''] = value.split('T')
+              setDate(nextDate)
+              setTime(nextTime.slice(0, 5))
+            }}
+            min={`${today}T00:00`}
+            hasError={!!errors.date || !!errors.time}
+            colors={colors}
+            isDark={isDark}
+          />
+          {errorText('date')}
+          {errorText('time')}
         </View>
 
         {/* Center */}
@@ -636,20 +627,13 @@ export default function EventFormPanel({ eventId, onClose, onSaved }: EventFormP
               <Text style={{ fontFamily: 'Inclusive Sans', fontSize: 13, color: colors.text }}>
                 {uploadingImage ? 'Uploading…' : image ? 'Replace photo' : 'Upload photo'}
               </Text>
-            </Pressable>
-            {image ? (
+          </Pressable>
+          {image ? (
               <Pressable onPress={() => setImage('')} accessibilityRole="button" style={{ paddingVertical: 10, paddingHorizontal: 6 }}>
                 <Text style={{ fontFamily: 'Inclusive Sans', fontSize: 13, color: colors.textMuted }}>Remove</Text>
               </Pressable>
             ) : null}
           </View>
-          <FormInput
-            value={image}
-            onChangeText={setImage}
-            placeholder="…or paste an image URL (https://...)"
-            colors={colors}
-            autoCapitalize="none"
-          />
           {errorText('image')}
         </View>
 

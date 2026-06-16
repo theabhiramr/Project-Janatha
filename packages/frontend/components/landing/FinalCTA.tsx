@@ -260,7 +260,7 @@ export function FinalCTA() {
           <Pressable
             onPress={() => {
               posthog?.capture('landing_cta_pressed', { variant: 'final', label: 'browse_events' })
-              router.push('/(tabs)')
+              router.push('/explore')
             }}
             className="bg-primary active:bg-primary-press rounded-full"
             style={{

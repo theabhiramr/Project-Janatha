@@ -267,7 +267,7 @@ export function useAuthFlow() {
         : 'Welcome back.'
       : authStep === 'signup'
         ? 'Join the community.'
-        : 'Welcome to Janata'
+        : 'Welcome'
 
   const subtitle =
     authStep === 'login'

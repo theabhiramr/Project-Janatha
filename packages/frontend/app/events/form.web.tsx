@@ -95,7 +95,7 @@ function NativeDateTimeInput({
   colors,
   isDark,
 }: {
-  type: 'date' | 'time'
+  type: 'date' | 'time' | 'datetime-local'
   value: string
   onChange: (v: string) => void
   min?: string
@@ -181,7 +181,7 @@ export default function EventFormPage() {
         setImage(url)
         track('event_form_image_uploaded', { source: 'event_form' })
       } catch {
-        setErrors((e) => ({ ...e, image: 'Upload failed — try again or paste a URL.' }))
+        setErrors((e) => ({ ...e, image: 'Upload failed. Please try again.' }))
       } finally {
         setUploadingImage(false)
       }
@@ -450,34 +450,22 @@ export default function EventFormPage() {
           />
         </FieldRow>
 
-        {/* Date + Time side by side */}
-        <View style={{ flexDirection: isNarrow ? 'column' : 'row', gap: isNarrow ? 24 : 28 }}>
-          <View style={{ flex: 1 }}>
-            <FieldRow label="Date" colors={colors} error={errors.date} required>
-              <NativeDateTimeInput
-                type="date"
-                value={date}
-                onChange={setDate}
-                min={today}
-                hasError={!!errors.date}
-                colors={colors}
-                isDark={isDark}
-              />
-            </FieldRow>
-          </View>
-          <View style={{ flex: 1 }}>
-            <FieldRow label="Time" colors={colors} error={errors.time}>
-              <NativeDateTimeInput
-                type="time"
-                value={time}
-                onChange={setTime}
-                hasError={!!errors.time}
-                colors={colors}
-                isDark={isDark}
-              />
-            </FieldRow>
-          </View>
-        </View>
+        {/* Date & time */}
+        <FieldRow label="Date & time" colors={colors} error={errors.date || errors.time} required>
+          <NativeDateTimeInput
+            type="datetime-local"
+            value={date ? `${date}T${time || '12:00'}` : ''}
+            onChange={(value) => {
+              const [nextDate, nextTime = ''] = value.split('T')
+              setDate(nextDate)
+              setTime(nextTime.slice(0, 5))
+            }}
+            min={`${today}T00:00`}
+            hasError={!!errors.date || !!errors.time}
+            colors={colors}
+            isDark={isDark}
+          />
+        </FieldRow>
 
         {/* Center selection */}
         <FieldRow label="Center" colors={colors} error={errors.center} required hint="Picking a center auto-fills address & coordinates.">
@@ -567,7 +555,7 @@ export default function EventFormPage() {
         </FieldRow>
 
         {/* Image — upload a photo or paste a URL */}
-        <FieldRow label="Image" colors={colors} hint="Optional. Upload a photo or paste a direct link.">
+        <FieldRow label="Image" colors={colors} error={errors.image} hint="Optional. Upload a photo or paste a direct link.">
           {image.trim() ? (
             <Image
               source={{ uri: image }}
@@ -593,14 +581,6 @@ export default function EventFormPage() {
               </Pressable>
             ) : null}
           </View>
-          <TextInput
-            value={image}
-            onChangeText={setImage}
-            placeholder="…or paste an image URL (https://...)"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            style={inputStyle()}
-          />
         </FieldRow>
 
         {/* Category */}

@@ -21,7 +21,8 @@ import {
   ThemeProvider as NavigationThemeProvider,
 } from '@react-navigation/native'
 import { useFonts } from 'expo-font'
-import { SplashScreen, Stack, usePathname, useRouter } from 'expo-router'
+import * as SplashScreen from 'expo-splash-screen'
+import { Stack, usePathname, useRouter } from 'expo-router'
 import { PostHogProvider, PostHogSurveyProvider } from 'posthog-react-native'
 import {
   UserProvider,
@@ -42,6 +43,7 @@ export const unstable_settings = {
 }
 
 SplashScreen.preventAutoHideAsync()
+SplashScreen.setOptions({ duration: 350, fade: true })
 
 const posthogHost = process.env.EXPO_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com'
 const posthogKey = process.env.EXPO_PUBLIC_POSTHOG_KEY
@@ -188,6 +190,8 @@ function RootLayoutNav({ onAuthReady }: { onAuthReady: () => void }) {
     width < 768 &&
     !pathname.startsWith('/auth') &&
     !pathname.startsWith('/onboarding') &&
+    pathname !== '/join' &&
+    !pathname.startsWith('/i/') &&
     pathname !== '/landing' &&
     pathname !== '/intro'
 
@@ -266,6 +270,7 @@ function RootLayoutNav({ onAuthReady }: { onAuthReady: () => void }) {
   }, [user, loading, pathname, isAuthenticated, introShown])
 
   const navTheme = isDark ? DarkTheme : DefaultTheme
+  const rootBackground = isDark ? '#1A1A1A' : '#FAFAF7'
   const prevIsDark = useRef(isDark)
   const fadeAnim = useRef(new Animated.Value(1)).current
 
@@ -282,9 +287,9 @@ function RootLayoutNav({ onAuthReady }: { onAuthReady: () => void }) {
   if (loading) return null
 
   return (
-    <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+    <Animated.View style={{ flex: 1, backgroundColor: rootBackground, opacity: fadeAnim }}>
       <NavigationThemeProvider value={navTheme}>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, backgroundColor: rootBackground }}>
         <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="auth" options={{ headerShown: false }} />

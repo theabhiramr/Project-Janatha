@@ -4,7 +4,9 @@ import { useRouter } from 'expo-router'
 import { useUser } from '../contexts'
 import { useAnalytics } from '../../utils/analytics'
 import { validateEmail } from '../../utils'
+import { extractInviteCode } from '../../utils/validation'
 import { useDetailColors } from '../../hooks/useDetailColors'
+import { InviteCodeInput } from '../invite/InviteCodeField'
 import PrimaryButton from './buttons/PrimaryButton'
 import SecondaryButton from './buttons/SecondaryButton'
 
@@ -58,6 +60,9 @@ export default function AuthPromptModal({
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
+  const [showInviteField, setShowInviteField] = useState(false)
+  const [inviteValue, setInviteValue] = useState('')
+  const [inviteError, setInviteError] = useState('')
 
   const trimmedEmail = email.trim()
 
@@ -66,6 +71,9 @@ export default function AuthPromptModal({
     setEmail('')
     setPassword('')
     setErrors({})
+    setShowInviteField(false)
+    setInviteValue('')
+    setInviteError('')
   }, [])
 
   const closePrompt = useCallback(() => {
@@ -84,20 +92,54 @@ export default function AuthPromptModal({
       return
     }
     track('auth_login_started', { source: 'auth_modal' })
+    setShowInviteField(false)
     setAuthStep('login')
   }, [track, trimmedEmail])
 
   const handlePasteInvite = useCallback(() => {
     track('invite_wall_paste_pressed', { source: 'auth_modal' })
+    setShowInviteField(true)
+  }, [track])
+
+  const handleHideInvite = useCallback(() => {
+    track('invite_wall_paste_cancelled', { source: 'auth_modal' })
+    setShowInviteField(false)
+    setInviteValue('')
+    setInviteError('')
+  }, [track])
+
+  const handleOpenInvite = useCallback((code: string) => {
+    track('invite_wall_code_submitted', { source: 'auth_modal' })
     closePrompt()
-    router.push('/join')
+    router.push(`/i/${encodeURIComponent(code)}` as never)
   }, [closePrompt, router, track])
+
+  const submitInvite = useCallback(() => {
+    const code = extractInviteCode(inviteValue)
+    if (!code) {
+      setInviteError('Paste a valid invite link or code.')
+      return
+    }
+    setInviteError('')
+    handleOpenInvite(code)
+  }, [handleOpenInvite, inviteValue])
+
+  const handleInitialSubmit = useCallback(() => {
+    if (showInviteField && inviteValue.trim()) {
+      submitInvite()
+      return
+    }
+    handleStartLogin()
+  }, [handleStartLogin, inviteValue, showInviteField, submitInvite])
 
   const handleBack = useCallback(() => {
     track('auth_back_pressed', { source: 'auth_modal', from_step: authStep })
     setAuthStep('initial')
     setPassword('')
     setErrors({})
+    setShowInviteField(false)
+    setInviteValue('')
+    setInviteError('')
   }, [authStep, track])
 
   const handleLogin = useCallback(async () => {
@@ -176,6 +218,8 @@ export default function AuthPromptModal({
     const modalWidth = isDesktop ? 860 : 380
     const stepTitle = authStep === 'login' ? 'Welcome back.' : wallTitle
     const stepCopy = authStep === 'login' ? 'Enter your password to continue.' : wallCopy
+    const inviteHasText = showInviteField && inviteValue.trim().length > 0
+    const initialDisabled = inviteHasText ? loading : (!trimmedEmail || loading)
 
     return (
       <View
@@ -302,7 +346,7 @@ export default function AuthPromptModal({
                 </View>
               )}
 
-              <View style={{ gap: 12, marginTop: 4 }}>
+              <View style={{ gap: showInviteField ? 8 : 12, marginTop: 4 }}>
                 {authStep === 'login' && (
                   <Pressable onPress={handleBack} style={{ alignSelf: 'flex-start', paddingVertical: 2 }}>
                     <Text style={{ fontFamily: 'Inclusive Sans', fontSize: 14, color: '#E8862A' }}>Back</Text>
@@ -334,6 +378,19 @@ export default function AuthPromptModal({
                   }}
                 />
                 {errors.email ? <Text style={{ fontFamily: 'Inclusive Sans', fontSize: 13, color: '#B91C1C' }}>{errors.email}</Text> : null}
+
+                {authStep === 'initial' && showInviteField && (
+                  <InviteCodeInput
+                    compact
+                    value={inviteValue}
+                    onChangeText={(next) => {
+                      setInviteValue(next)
+                      if (inviteError) setInviteError('')
+                    }}
+                    error={inviteError}
+                    onSubmitEditing={submitInvite}
+                  />
+                )}
 
                 {authStep === 'login' && (
                   <>
@@ -367,12 +424,21 @@ export default function AuthPromptModal({
 
                 {authStep === 'initial' ? (
                   <>
-                    <PrimaryButton onPress={handleStartLogin} disabled={!trimmedEmail || loading} style={{ borderRadius: 8 }}>
-                      Log In
+                    <PrimaryButton onPress={handleInitialSubmit} disabled={initialDisabled} style={{ borderRadius: 8 }}>
+                      {showInviteField ? 'Continue' : 'Log In'}
                     </PrimaryButton>
-                    <SecondaryButton onPress={handlePasteInvite} style={{ borderRadius: 8, backgroundColor: '#FFFFFF' }}>
-                      Have an invite? Paste it
-                    </SecondaryButton>
+                    {showInviteField && (
+                      <Pressable onPress={handleHideInvite} style={{ alignItems: 'center', paddingTop: 2 }}>
+                        <Text style={{ fontFamily: 'Inclusive Sans', fontSize: 14, color: '#78716C' }}>
+                          No invite? <Text style={{ color: '#E8862A', fontWeight: '600' }}>Use email instead</Text>
+                        </Text>
+                      </Pressable>
+                    )}
+                    {!showInviteField && (
+                      <SecondaryButton onPress={handlePasteInvite} style={{ borderRadius: 8, backgroundColor: '#FFFFFF' }}>
+                        Have an invite? Paste it
+                      </SecondaryButton>
+                    )}
                   </>
                 ) : (
                   <PrimaryButton onPress={handleLogin} disabled={!password || loading} style={{ borderRadius: 8 }}>
@@ -390,6 +456,8 @@ export default function AuthPromptModal({
   // Native modal
   const nativeTitle = authStep === 'login' ? 'Welcome back' : wallTitle
   const nativeCopy = authStep === 'login' ? 'Enter your password to continue.' : wallCopy
+  const nativeInviteHasText = showInviteField && inviteValue.trim().length > 0
+  const nativeInitialDisabled = nativeInviteHasText ? loading : (!trimmedEmail || loading)
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={closePrompt}>
@@ -411,7 +479,7 @@ export default function AuthPromptModal({
           <Text style={{ fontSize: 15, fontFamily: 'Inclusive Sans', color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }}>
             {nativeCopy}
           </Text>
-          <View style={{ gap: 10, marginTop: 4 }}>
+          <View style={{ gap: showInviteField ? 8 : 10, marginTop: 4 }}>
             {authStep === 'login' && (
               <Pressable onPress={handleBack} style={{ alignSelf: 'flex-start', paddingVertical: 2 }}>
                 <Text style={{ fontSize: 14, fontFamily: 'Inclusive Sans', color: '#E8862A' }}>Back</Text>
@@ -443,6 +511,19 @@ export default function AuthPromptModal({
               }}
             />
             {errors.email ? <Text style={{ fontSize: 13, fontFamily: 'Inclusive Sans', color: '#B91C1C' }}>{errors.email}</Text> : null}
+
+            {authStep === 'initial' && showInviteField && (
+              <InviteCodeInput
+                compact
+                value={inviteValue}
+                onChangeText={(next) => {
+                  setInviteValue(next)
+                  if (inviteError) setInviteError('')
+                }}
+                error={inviteError}
+                onSubmitEditing={submitInvite}
+              />
+            )}
 
             {authStep === 'login' && (
               <>
@@ -476,12 +557,21 @@ export default function AuthPromptModal({
 
             {authStep === 'initial' ? (
               <>
-                <PrimaryButton onPress={handleStartLogin} disabled={!trimmedEmail || loading}>
-                  Log In
+                <PrimaryButton onPress={handleInitialSubmit} disabled={nativeInitialDisabled}>
+                  {showInviteField ? 'Continue' : 'Log In'}
                 </PrimaryButton>
-                <SecondaryButton onPress={handlePasteInvite}>
-                  Have an invite? Paste it
-                </SecondaryButton>
+                {showInviteField && (
+                  <Pressable onPress={handleHideInvite} style={{ alignItems: 'center', paddingTop: 2 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inclusive Sans', color: colors.textMuted }}>
+                      No invite? <Text style={{ color: '#E8862A', fontWeight: '600' }}>Use email instead</Text>
+                    </Text>
+                  </Pressable>
+                )}
+                {!showInviteField && (
+                  <SecondaryButton onPress={handlePasteInvite}>
+                    Have an invite? Paste it
+                  </SecondaryButton>
+                )}
               </>
             ) : (
               <PrimaryButton onPress={handleLogin} disabled={!password || loading}>

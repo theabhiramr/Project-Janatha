@@ -17,6 +17,8 @@ import { useTheme } from '../components/contexts'
 import { PasswordStrength } from '../components'
 import DevPanel from '../components/DevPanel'
 import { useAuthFlow } from '../components/auth/useAuthFlow'
+import { InviteCodeInput } from '../components/invite/InviteCodeField'
+import { extractInviteCode } from '../utils/validation'
 
 // __DEV__ is a React Native/Expo global — always false in production builds.
 // EXPO_PUBLIC_SHOW_DEV_TOOLS=1 also enables the dev/demo tools (set on the
@@ -59,7 +61,47 @@ export default function AuthScreen() {
   } = useAuthFlow()
 
   const [showDevPanel, setShowDevPanel] = useState(false)
+  const [showInviteField, setShowInviteField] = useState(false)
+  const [inviteValue, setInviteValue] = useState('')
+  const [inviteError, setInviteError] = useState('')
 
+  const revealInviteField = () => {
+    track('auth_have_invite_pressed', { source: 'auth' })
+    setShowInviteField(true)
+  }
+
+  const hideInviteField = () => {
+    track('auth_invite_entry_cancelled', { source: 'auth' })
+    setShowInviteField(false)
+    setInviteValue('')
+    setInviteError('')
+  }
+
+  const openInvite = (code: string) => {
+    track('auth_invite_code_submitted', { source: 'auth' })
+    router.push(`/i/${encodeURIComponent(code)}` as never)
+  }
+
+  const submitInvite = () => {
+    const code = extractInviteCode(inviteValue)
+    if (!code) {
+      setInviteError('Paste a valid invite link or code.')
+      return
+    }
+    setInviteError('')
+    openInvite(code)
+  }
+
+  const handlePrimaryPress = () => {
+    if (showInviteField && inviteValue.trim()) {
+      submitInvite()
+      return
+    }
+    handleSubmit()
+  }
+
+  const inviteHasText = showInviteField && inviteValue.trim().length > 0
+  const primaryDisabled = inviteHasText ? loading : isButtonDisabled
   const rootStyle: ViewStyle = { flex: 1, backgroundColor: pageBg }
 
   return (
@@ -167,7 +209,7 @@ export default function AuthScreen() {
             )}
 
             {/* Form */}
-            <View className="gap-4">
+            <View style={{ gap: showInviteField ? 8 : 16 }}>
               <View>
                 <AuthInput
                   placeholder="Email"
@@ -216,12 +258,25 @@ export default function AuthScreen() {
                 </>
               )}
 
+              {authStep === 'initial' && !hasInvite && showInviteField && (
+                <InviteCodeInput
+                  compact
+                  value={inviteValue}
+                  onChangeText={(next) => {
+                    setInviteValue(next)
+                    if (inviteError) setInviteError('')
+                  }}
+                  error={inviteError}
+                  onSubmitEditing={submitInvite}
+                />
+              )}
+
               {/* Submit Button */}
               <PrimaryButton
-                onPress={handleSubmit}
-                disabled={isButtonDisabled}
+                onPress={handlePrimaryPress}
+                disabled={primaryDisabled}
                 loading={loading}
-                style={{ marginTop: 8 }}
+                style={{ marginTop: showInviteField ? 0 : 8 }}
               >
                 {authStep === 'login'
                   ? 'Log In'
@@ -231,6 +286,17 @@ export default function AuthScreen() {
                       : 'Sign Up'
                     : 'Continue'}
               </PrimaryButton>
+
+              {authStep === 'initial' && !hasInvite && showInviteField && (
+                <Pressable
+                  className="items-center"
+                  onPress={hideInviteField}
+                >
+                  <Text className="font-sans" style={{ fontSize: 14, color: mutedColor }}>
+                    No invite? <Text style={{ color: '#E8862A', fontWeight: '600' }}>Use email instead</Text>
+                  </Text>
+                </Pressable>
+              )}
 
               {/* Forgot Password (only on login) */}
               {authStep === 'login' && (
@@ -242,17 +308,18 @@ export default function AuthScreen() {
                 </Pressable>
               )}
 
-              {/* Have an invite? — manual code entry now that the typed step is
-                  cut (form-03). Routes to the neutral paste screen (new-25). */}
+              {/* Have an invite? — reveal the same paste field used by /join and the modal. */}
               {authStep === 'initial' && !hasInvite && (
-                <Pressable
-                  className="items-center mt-2"
-                  onPress={() => { track('auth_have_invite_pressed', { source: 'auth' }); router.push('/join') }}
-                >
-                  <Text className="font-sans" style={{ fontSize: 14, color: mutedColor }}>
-                    Have an invite? <Text style={{ color: '#E8862A', fontWeight: '600' }}>Paste it</Text>
-                  </Text>
-                </Pressable>
+                !showInviteField && (
+                  <Pressable
+                    className="items-center mt-4"
+                    onPress={revealInviteField}
+                  >
+                    <Text className="font-sans" style={{ fontSize: 14, color: mutedColor }}>
+                      Have an invite? <Text style={{ color: '#E8862A', fontWeight: '600' }}>Paste it</Text>
+                    </Text>
+                  </Pressable>
+                )
               )}
             </View>
 
