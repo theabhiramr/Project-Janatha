@@ -3506,6 +3506,35 @@ describe('moderation', () => {
     postId = post.post.id
   })
 
+  async function createReportedCenterPost(
+    centerName: string,
+    memberUsername: string,
+    reporterUsername: string,
+    body: string,
+  ): Promise<{ centerId: string; postId: string; memberToken: string }> {
+    const { body: center } = await jsonPost(
+      '/api/addCenter',
+      { centerName, latitude: 38.0, longitude: -122.0 },
+      authHeader(adminToken),
+    )
+    const member = await registerAndLogin(memberUsername, 'password123')
+    await env.DB.prepare('UPDATE users SET center_id = ? WHERE id = ?')
+      .bind(center.id, member.user.id)
+      .run()
+    const { body: post } = await jsonPost(
+      `/api/boards/center/${center.id}/posts`,
+      { body },
+      authHeader(member.token),
+    )
+    const reporter = await registerAndLogin(reporterUsername, 'password123')
+    await jsonPost(
+      `/api/boards/posts/${post.post.id}/report`,
+      { reason: 'out of scope' },
+      authHeader(reporter.token),
+    )
+    return { centerId: center.id, postId: post.post.id, memberToken: member.token }
+  }
+
   describe('POST /boards/posts/:postId/report', () => {
     it('lets an authenticated user report a post (201) and surfaces it in the queue', async () => {
       const reporter = await registerAndLogin('reporter1', 'password123')
@@ -3570,7 +3599,7 @@ describe('moderation', () => {
         .run()
     })
 
-    it('lets a sevak view the moderation queue (200)', async () => {
+    it('lets a sevak view reported posts in their own center scope', async () => {
       const reporter = await registerAndLogin('sevakreporter', 'password123')
       await jsonPost(`/api/boards/posts/${postId}/report`, { reason: 'spam' }, authHeader(reporter.token))
       const { res, body } = await fetchJSON('/api/admin/moderation/queue', {
@@ -3578,6 +3607,7 @@ describe('moderation', () => {
       })
       expect(res.status).toBe(200)
       expect(body.data).toHaveLength(1)
+      expect(body.data[0].post.id).toBe(postId)
     })
 
     it('lets a sevak remove a reported post + writes an audit entry', async () => {
@@ -3594,6 +3624,87 @@ describe('moderation', () => {
       })
       expect(aRes.status).toBe(200)
       expect(audit.data.length).toBeGreaterThan(0)
+    })
+
+    it('does not show another center report in a sevak moderation queue', async () => {
+      const reporter = await registerAndLogin('sevakreporter3', 'password123')
+      await jsonPost(`/api/boards/posts/${postId}/report`, { reason: 'spam' }, authHeader(reporter.token))
+      const other = await createReportedCenterPost(
+        'Other Mod Center',
+        'othermodmember',
+        'othermodreporter',
+        'out-of-center post',
+      )
+
+      const { res, body } = await fetchJSON('/api/admin/moderation/queue', {
+        headers: authHeader(sevakToken),
+      })
+      expect(res.status).toBe(200)
+      expect(body.total).toBe(1)
+      expect(body.data.map((item: any) => item.post.id)).toEqual([postId])
+
+      const { body: adminQueue } = await fetchJSON('/api/admin/moderation/queue', {
+        headers: authHeader(adminToken),
+      })
+      expect(adminQueue.data.map((item: any) => item.post.id)).toEqual(
+        expect.arrayContaining([postId, other.postId]),
+      )
+    })
+
+    it('rejects sevak deletion outside scope but still allows own-center deletion', async () => {
+      const reporter = await registerAndLogin('sevakreporter4', 'password123')
+      await jsonPost(`/api/boards/posts/${postId}/report`, { reason: 'bad' }, authHeader(reporter.token))
+      const other = await createReportedCenterPost(
+        'Outside Delete Center',
+        'outsidedeletemember',
+        'outsidedeletereporter',
+        'out-of-center delete target',
+      )
+
+      const blocked = await jsonPost(
+        `/api/admin/moderation/posts/${other.postId}/delete`,
+        {},
+        authHeader(sevakToken),
+      )
+      expect(blocked.res.status).toBe(403)
+      const otherRow = await env.DB.prepare('SELECT deleted_at FROM board_posts WHERE id = ?')
+        .bind(other.postId)
+        .first<{ deleted_at: string | null }>()
+      expect(otherRow?.deleted_at).toBeNull()
+
+      const allowed = await jsonPost(
+        `/api/admin/moderation/posts/${postId}/delete`,
+        {},
+        authHeader(sevakToken),
+      )
+      expect(allowed.res.status).toBe(200)
+    })
+
+    it('scopes sevak audit entries to posts they can moderate', async () => {
+      const reporter = await registerAndLogin('sevakreporter5', 'password123')
+      await jsonPost(`/api/boards/posts/${postId}/report`, { reason: 'bad' }, authHeader(reporter.token))
+      const other = await createReportedCenterPost(
+        'Other Audit Center',
+        'otherauditmember',
+        'otherauditreporter',
+        'out-of-center audit target',
+      )
+
+      await jsonPost(`/api/admin/moderation/posts/${postId}/delete`, {}, authHeader(sevakToken))
+      await jsonPost(`/api/admin/moderation/posts/${other.postId}/delete`, {}, authHeader(adminToken))
+
+      const { res, body } = await fetchJSON('/api/admin/moderation/audit', {
+        headers: authHeader(sevakToken),
+      })
+      expect(res.status).toBe(200)
+      expect(body.data.map((item: any) => item.targetPostId)).toEqual([postId])
+
+      const { body: adminAudit } = await fetchJSON('/api/admin/moderation/audit', {
+        headers: authHeader(adminToken),
+      })
+      expect(adminAudit.data.map((item: any) => item.targetPostId)).toEqual(
+        expect.arrayContaining([postId, other.postId]),
+      )
     })
 
     it('does NOT let a sevak suspend a user — account actions stay admin-only (403)', async () => {

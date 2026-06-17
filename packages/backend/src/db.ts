@@ -1123,7 +1123,7 @@ export type BoardPostDeleteResult =
 export async function softDeleteBoardPost(
   db: D1Database,
   postId: string,
-  actor: { id: string; isAdmin: boolean },
+  actor: { id: string; isAdmin: boolean; canModerate?: boolean },
 ): Promise<BoardPostDeleteResult> {
   const post = await db
     .prepare(`SELECT author_id, deleted_at FROM board_posts WHERE id = ?1`)
@@ -1132,7 +1132,7 @@ export async function softDeleteBoardPost(
 
   if (!post) return { ok: false, reason: 'not_found' }
   if (post.deleted_at) return { ok: false, reason: 'already_deleted' }
-  if (post.author_id !== actor.id && !actor.isAdmin) {
+  if (post.author_id !== actor.id && !actor.isAdmin && !actor.canModerate) {
     return { ok: false, reason: 'forbidden' }
   }
 
@@ -1416,6 +1416,55 @@ export type ModerationQueueRow = {
   status: 'open' | 'actioned'
 }
 
+export type ModerationScope =
+  | { isAdmin: true }
+  | { isAdmin: false; userId: string; centerId: string | null }
+
+function scopedModerationWhere(): string {
+  return `bp.board_id IS NOT NULL
+    AND (
+      (b.type = 'center' AND ? = 1 AND b.parent_id = ?)
+      OR
+      (b.type = 'event' AND (
+        (? = 1 AND e.center_id = ?)
+        OR e.created_by = ?
+        OR EXISTS (
+          SELECT 1 FROM event_attendees ea
+          WHERE ea.event_id = e.id AND ea.user_id = ?
+        )
+      ))
+    )`
+}
+
+function scopedModerationParams(
+  scope: Extract<ModerationScope, { isAdmin: false }>,
+): Array<string | number> {
+  const hasCenter = scope.centerId ? 1 : 0
+  const centerId = scope.centerId ?? ''
+  return [hasCenter, centerId, hasCenter, centerId, scope.userId, scope.userId]
+}
+
+export async function canModerateBoardPost(
+  db: D1Database,
+  postId: string,
+  scope: ModerationScope,
+): Promise<boolean> {
+  if (scope.isAdmin) return true
+
+  const result = await db
+    .prepare(
+      `SELECT 1
+       FROM board_posts bp
+       LEFT JOIN boards b ON b.id = bp.board_id
+       LEFT JOIN events e ON b.type = 'event' AND e.id = b.parent_id
+       WHERE bp.id = ? AND ${scopedModerationWhere()}
+       LIMIT 1`,
+    )
+    .bind(postId, ...scopedModerationParams(scope))
+    .first()
+  return result !== null
+}
+
 /**
  * File or update a report on a board post. One report per (post, reporter):
  * re-reporting updates the reason and re-opens the report.
@@ -1450,35 +1499,53 @@ export async function createPostReport(
  */
 export async function listModerationQueue(
   db: D1Database,
-  opts: { limit?: number; offset?: number; includeResolved?: boolean } = {},
+  opts: {
+    limit?: number
+    offset?: number
+    includeResolved?: boolean
+    scope?: ModerationScope
+  } = {},
 ): Promise<{ items: ModerationQueueRow[]; total: number }> {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100)
   const offset = Math.max(opts.offset ?? 0, 0)
   const havingOpen = opts.includeResolved ? '' : 'HAVING open_count > 0'
+  const scope = opts.scope ?? { isAdmin: true as const }
+  const where = scope.isAdmin ? '1 = 1' : scopedModerationWhere()
+  const scopeParams = scope.isAdmin ? [] : scopedModerationParams(scope)
 
   const totalRow = await db
     .prepare(
       `SELECT COUNT(*) AS count FROM (
-         SELECT post_id, SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count
-         FROM post_reports GROUP BY post_id ${havingOpen}
+         SELECT pr.post_id, SUM(CASE WHEN pr.status = 'open' THEN 1 ELSE 0 END) AS open_count
+         FROM post_reports pr
+         JOIN board_posts bp ON bp.id = pr.post_id
+         LEFT JOIN boards b ON b.id = bp.board_id
+         LEFT JOIN events e ON b.type = 'event' AND e.id = b.parent_id
+         WHERE ${where}
+         GROUP BY pr.post_id ${havingOpen}
        )`,
     )
+    .bind(...scopeParams)
     .first<{ count: number }>()
   const total = totalRow?.count ?? 0
 
   const grouped = await db
     .prepare(
-      `SELECT post_id,
+      `SELECT pr.post_id,
               COUNT(*) AS report_count,
-              SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count,
-              MAX(created_at) AS latest_at
-       FROM post_reports
-       GROUP BY post_id
+              SUM(CASE WHEN pr.status = 'open' THEN 1 ELSE 0 END) AS open_count,
+              MAX(pr.created_at) AS latest_at
+       FROM post_reports pr
+       JOIN board_posts bp ON bp.id = pr.post_id
+       LEFT JOIN boards b ON b.id = bp.board_id
+       LEFT JOIN events e ON b.type = 'event' AND e.id = b.parent_id
+       WHERE ${where}
+       GROUP BY pr.post_id
        ${havingOpen}
        ORDER BY latest_at DESC
-       LIMIT ?1 OFFSET ?2`,
+       LIMIT ? OFFSET ?`,
     )
-    .bind(limit, offset)
+    .bind(...scopeParams, limit, offset)
     .all<{ post_id: string; report_count: number; open_count: number; latest_at: string }>()
 
   const rows = grouped.results ?? []
@@ -1557,10 +1624,41 @@ export async function createModerationAction(
 /** List moderation audit log entries, newest first. */
 export async function listModerationActions(
   db: D1Database,
-  opts: { limit?: number; offset?: number } = {},
+  opts: { limit?: number; offset?: number; scope?: ModerationScope } = {},
 ): Promise<{ items: ModerationActionRow[]; total: number }> {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100)
   const offset = Math.max(opts.offset ?? 0, 0)
+  const scope = opts.scope ?? { isAdmin: true as const }
+
+  if (!scope.isAdmin) {
+    const where = scopedModerationWhere()
+    const scopeParams = scopedModerationParams(scope)
+    const totalRow = await db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM moderation_actions ma
+         JOIN board_posts bp ON bp.id = ma.target_post_id
+         LEFT JOIN boards b ON b.id = bp.board_id
+         LEFT JOIN events e ON b.type = 'event' AND e.id = b.parent_id
+         WHERE ${where}`,
+      )
+      .bind(...scopeParams)
+      .first<{ count: number }>()
+    const result = await db
+      .prepare(
+        `SELECT ma.*
+         FROM moderation_actions ma
+         JOIN board_posts bp ON bp.id = ma.target_post_id
+         LEFT JOIN boards b ON b.id = bp.board_id
+         LEFT JOIN events e ON b.type = 'event' AND e.id = b.parent_id
+         WHERE ${where}
+         ORDER BY ma.created_at DESC LIMIT ? OFFSET ?`,
+      )
+      .bind(...scopeParams, limit, offset)
+      .all<ModerationActionRow>()
+    return { items: result.results ?? [], total: totalRow?.count ?? 0 }
+  }
+
   const totalRow = await db
     .prepare('SELECT COUNT(*) AS count FROM moderation_actions')
     .first<{ count: number }>()

@@ -192,6 +192,20 @@ async function moderatorMiddleware(c: any, next: () => Promise<void>): Promise<R
   await next()
 }
 
+// Content moderation policy: global admins moderate every report. Sevaks are
+// local moderators only: center-board reports for their own center, and
+// event-board reports when the event belongs to their center, was created by
+// them, or they attend it. Public/global feed reports have no local owner and
+// remain admin-only.
+function moderationScopeFor(user: UserRow): db.ModerationScope {
+  if (isAdmin(user)) return { isAdmin: true }
+  return {
+    isAdmin: false,
+    userId: user.id,
+    centerId: user.center_id,
+  }
+}
+
 // ── Global error handler ──────────────────────────────────────────────
 
 app.onError((err, c) => {
@@ -3268,12 +3282,18 @@ app.delete('/admin/notifications/:id', adminMiddleware, async (c) => {
 
 /** Admin moderation queue: reported posts grouped by post, newest first. */
 app.get('/admin/moderation/queue', moderatorMiddleware, async (c) => {
+  const moderator = c.get('user')
   const url = new URL(c.req.url)
   const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10) || 50, 1), 100)
   const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0', 10) || 0, 0)
   const includeResolved = url.searchParams.get('includeResolved') === 'true'
 
-  const { items, total } = await db.listModerationQueue(c.env.DB, { limit, offset, includeResolved })
+  const { items, total } = await db.listModerationQueue(c.env.DB, {
+    limit,
+    offset,
+    includeResolved,
+    scope: moderationScopeFor(moderator),
+  })
   return c.json({
     data: items.map((item) => ({
       post: boardPostToApi(item.post),
@@ -3299,7 +3319,18 @@ app.post('/admin/moderation/posts/:postId/delete', moderatorMiddleware, async (c
     return c.json({ message: 'Board post not found' }, 404)
   }
 
-  const result = await db.softDeleteBoardPost(c.env.DB, postId, { id: admin.id, isAdmin: true })
+  const scope = moderationScopeFor(admin)
+  const canModerate = await db.canModerateBoardPost(c.env.DB, postId, scope)
+  if (!canModerate) {
+    return c.json({ message: 'You do not have access to moderate this post' }, 403)
+  }
+
+  const userIsAdmin = isAdmin(admin)
+  const result = await db.softDeleteBoardPost(c.env.DB, postId, {
+    id: admin.id,
+    isAdmin: userIsAdmin,
+    canModerate: !userIsAdmin,
+  })
   // already_deleted is fine — the post is gone either way; we still resolve
   // reports and log the action so the queue clears.
   if (!result.ok && result.reason === 'not_found') {
@@ -3397,10 +3428,15 @@ app.post('/admin/moderation/users/:userId/unsuspend', adminMiddleware, async (c)
 
 /** Admin: moderation audit log, newest first. */
 app.get('/admin/moderation/audit', moderatorMiddleware, async (c) => {
+  const moderator = c.get('user')
   const url = new URL(c.req.url)
   const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10) || 50, 1), 100)
   const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0', 10) || 0, 0)
-  const { items, total } = await db.listModerationActions(c.env.DB, { limit, offset })
+  const { items, total } = await db.listModerationActions(c.env.DB, {
+    limit,
+    offset,
+    scope: moderationScopeFor(moderator),
+  })
   return c.json({ data: items.map(moderationActionRowToApi), total, limit, offset })
 })
 
