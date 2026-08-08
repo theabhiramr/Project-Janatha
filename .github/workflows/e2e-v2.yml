@@ -51,7 +51,7 @@ jobs:
       # shared remote preview, so keep concurrency modest.
       E2E_WORKERS: '4'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
