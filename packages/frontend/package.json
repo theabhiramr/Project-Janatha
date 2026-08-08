@@ -55,7 +55,7 @@
     "posthog-react-native": "^4.39.0",
     "react": "19.2.0",
     "react-datepicker": "^8.9.0",
-    "react-dom": "19.2.0",
+    "react-dom": "19.2.7",
     "react-easy-crop": "^5.5.7",
     "react-map-gl": "^8.1.0",
     "react-native": "0.83.4",
